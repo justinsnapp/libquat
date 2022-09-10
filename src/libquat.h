@@ -47,7 +47,14 @@ extern "C" {
  * fingers are pointing in the direction of positive rotation angles).
  */
 
-#define	QUAT_VEC3(_x, _y, _z) ((struct vec3){ .x = (_x), .y = (_y), .z = (_z)})
+#if defined(MATHC_USE_UNIONS)
+#define	QUAT_VEC3(_x, _y, _z) ((struct vec3){.v = { [0] = (mfloat_t)(_x), [1] = (mfloat_t)(_y), [2] = (mfloat_t)(_z)}})
+#define QUAT_VEC4(_x, _y, _z, _w) ((struct quat){.v = { [0] = (mfloat_t)(_x), [1] = (mfloat_t)(_y), [2] = (mfloat_t)(_z), [3] = (mfloat_t)(_w)}})
+#else
+#define QUAT_VEC3(_x, _y, _z) ((struct vec3){.x = (mfloat_t)(_x), .y = (mfloat_t)(_y), .z = (mfloat_t)(_z)})
+#define QUAT_VEC4(_x, _y, _z, _w) ((struct quat){.x = (mfloat_t)(_x), .y = (mfloat_t)(_y), .z = (mfloat_t)(_z), .w = (mfloat_t)(_w)})
+#endif
+
 /*
  * Unit vectors along the OpenGL X, Y and Z axes in libquat internal format.
  */
@@ -122,12 +129,21 @@ static inline struct quat
 quat_inv(struct quat q)
 {
 	struct quat p;
+#if defined(MATHC_USE_UNIONS)
 	quat_inverse(p.v, q.v);
+#else
+    quat_inverse((mfloat_t*) &p, (mfloat_t*) &q);
+#endif
 	return (p);
 }
 
 void quat_print(struct quat q);
-void quat_print_euler(struct quat q);
+
+void
+quat_print_named(char *name, struct quat q);
+
+void 
+_euler(struct quat q);
 void quat_print_axis_angle(struct quat q);
 
 /*
@@ -142,7 +158,11 @@ typedef struct {
 static inline struct quat
 NED2quat(NED_t ned)
 {
+#if defined(MATHC_USE_UNIONS)
 	return ((struct quat){{{ ned.N, ned.E, ned.D }}});
+#else
+    return ((struct quat) {.x = ned.N, .y = ned.E, .z = ned.D, .w = 0});
+#endif
 }
 
 static inline NED_t

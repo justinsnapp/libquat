@@ -25,10 +25,12 @@
 
 #include <stdio.h>
 
+#include "libquat.h"
+
 #include <acfutils/assert.h>
 #include <acfutils/perf.h>
+#include <acfutils/log.h>
 
-#include "libquat.h"
 
 CTASSERT(sizeof (mfloat_t) == sizeof (long double));
 
@@ -43,9 +45,16 @@ quat_hamil_prod(struct quat p, struct quat q)
 
 	ASSERT(!IS_NULL_QUAT(p));
 	ASSERT(!IS_NULL_QUAT(q));
+
+#if defined(MATHC_USE_UNIONS)
 	quat_inverse(q_inv.v, q.v);
 	quat_multiply(out.v, q.v, p.v);
 	quat_multiply(out.v, out.v, q_inv.v);
+#else
+	quat_inverse(&q_inv, &q);
+	quat_multiply(&out, &q, &p);
+	quat_multiply(&out, &out, &q_inv);
+#endif
 
 	return (out);
 }
@@ -86,11 +95,46 @@ quat_local2ecmigl(geo_pos2_t refpt, mfloat_t ref_time)
 
 	ASSERT(isfinite(ref_time));
 	ASSERT(!IS_NULL_GEO_POS(refpt));
-	quat_from_axis_angle(lat_q.v, QUAT_AXIS_X_GL.v,
-	    DEG2RAD(90 - refpt.lat));
-	quat_from_axis_angle(lon_q.v, QUAT_AXIS_Y_GL.v,
-	    DEG2RAD(refpt.lon + EARTH_ROT_RATE * ref_time));
+#if defined(MATHC_USE_UNIONS)
+	
+	struct vec3 open_gl_x_axis_v3 = {0.0, 1.0, 0.0};
+	struct vec3 open_gl_y_axis_v3 = {0.0, 0.0, -1.0};
+
+	quat_from_axis_angle(lat_q.v, open_gl_x_axis_v3.v, DEG2RAD(90 - refpt.lat));
+	quat_from_axis_angle(lon_q.v, open_gl_y_axis_v3.v, DEG2RAD(refpt.lon + EARTH_ROT_RATE * ref_time));
+
+	// logMsg("[DEBUG] lon_q is %lf, %lf, %lf, %lf", (double) lon_q.x, (double) lon_q.y, 
+ //                                                                (double) lon_q.z, (double) lon_q.w);
+
+ //    logMsg("[DEBUG] lat_q is %lf, %lf, %lf, %lf", (double) lat_q.x, (double) lat_q.y, 
+ //                                                                (double) lat_q.z, (double) lat_q.w);
+
 	quat_multiply(out_q.v, lon_q.v, lat_q.v);
+
+    // logMsg("[DEBUG] out_q is %lf, %lf, %lf, %lf", (double) out_q.x, (double) out_q.y, 
+    //                                                            (double) out_q.z, (double) out_q.w);
+
+#else 
+	out_q = (struct quat) {.x = 0, .y = 0, .z = 0, .w = 0};
+	quat_from_axis_angle((mfloat_t*) &lat_q, (mfloat_t*) &QUAT_AXIS_X_GL,
+	    DEG2RAD(90 - refpt.lat));
+	quat_from_axis_angle( (mfloat_t*)  &lon_q,(mfloat_t*) &QUAT_AXIS_Y_GL,
+	    DEG2RAD(refpt.lon + EARTH_ROT_RATE * ref_time));
+
+	// logMsg("[DEBUG] lon_q is %lf, %lf, %lf, %lf", (double) lon_q.x, (double) lon_q.y, 
+ //                                                                (double) lon_q.z, (double) lon_q.w);
+
+ //    logMsg("[DEBUG] lat_q is %lf, %lf, %lf, %lf", (double) lat_q.x, (double) lat_q.y, 
+ //                                                                (double) lat_q.z, (double) lat_q.w);
+
+ //    logMsg("[DEBUG] out_q is %lf, %lf, %lf, %lf", (double) out_q.x, (double) out_q.y, 
+ //                                                                (double) out_q.z, (double) out_q.w);
+
+	quat_multiply((mfloat_t*) &out_q, (mfloat_t*) &lon_q, (mfloat_t*) &lat_q);
+
+	// logMsg("[DEBUG] out_q is %lf, %lf, %lf, %lf", (double) out_q.x, (double) out_q.y, 
+    //                                                            (double) out_q.z, (double) out_q.w);
+#endif
 
 	return (out_q);
 }
@@ -107,8 +151,14 @@ quat_ecmigl2local(geo_pos2_t refpt, mfloat_t ref_time)
 
 	ASSERT(isfinite(ref_time));
 	ASSERT(!IS_NULL_GEO_POS(refpt));
+
 	q = quat_local2ecmigl(refpt, ref_time);
+
+#if defined(MATHC_USE_UNIONS)
 	quat_inverse(q_inv.v, q.v);
+#else 
+	quat_inverse((mfloat_t*) &q_inv, (mfloat_t*) &q);
+#endif
 
 	return (q_inv);
 }
@@ -125,8 +175,14 @@ quat_rot_rel(struct quat q1, struct quat q2)
 
 	ASSERT(!IS_NULL_QUAT(q1));
 	ASSERT(!IS_NULL_QUAT(q2));
+
+#if defined(MATHC_USE_UNIONS)
 	quat_inverse(q1_inv.v, q1.v);
 	quat_multiply(d_quat.v, q2.v, q1_inv.v);
+#else
+	quat_inverse((mfloat_t*) &q1_inv, (mfloat_t*) &q1);
+	quat_multiply((mfloat_t*) &d_quat, (mfloat_t*) &q2, (mfloat_t*) &q1_inv);
+#endif
 
 	return (d_quat);
 }
@@ -142,7 +198,12 @@ quat_rot_concat(struct quat from, struct quat delta)
 
 	ASSERT(!IS_NULL_QUAT(from));
 	ASSERT(!IS_NULL_QUAT(delta));
+
+#if defined(MATHC_USE_UNIONS)
 	quat_multiply(to.v, delta.v, from.v);
+#else 
+	quat_multiply((mfloat_t*) &to, (mfloat_t*) &delta, (mfloat_t*) &from);
+#endif
 
 	return (to);
 }
@@ -275,7 +336,12 @@ quat_to_euler_deg(struct quat q, mfloat_t *psi, mfloat_t *theta, mfloat_t *phi)
 struct quat
 quat_from_xp(struct quat xp_q)
 {
+#if defined(MATHC_USE_UNIONS)
 	struct quat q = { .v = { xp_q.v[1], xp_q.v[2], xp_q.v[3], xp_q.v[0] } };
+#else
+	struct quat q = { .x = xp_q.y, .y = xp_q.z, .z = xp_q.w, .w = xp_q.x };
+#endif
+
 	return (q);
 }
 
@@ -286,7 +352,13 @@ quat_from_xp(struct quat xp_q)
 struct quat
 quat_to_xp(struct quat q)
 {
+
+#if defined(MATHC_USE_UNIONS)
 	struct quat xp_q = { .v = { q.v[3], q.v[0], q.v[1], q.v[2] } };
+#else 
+	struct quat xp_q = { .x = q.w, .y = q.x, .z = q.y, .w = q.z };
+#endif
+
 	return (xp_q);
 }
 
@@ -294,12 +366,24 @@ void
 quat_print(struct quat q)
 {
 #ifndef	__MINGW32__
-	printf(".w=%11Lf .x=%11Lf .y=%11Lf .z=%11Lf\n", q.w, q.x, q.y, q.z);
+	logMsg(".w=%11Lf .x=%11Lf .y=%11Lf .z=%11Lf\n", q.w, q.x, q.y, q.z);
 #else	/* defined(__MINGW32__) */
-	printf(".w=%11f .x=%11f .y=%11f .z=%11f\n",
+	logMsg(".w=%11f .x=%11f .y=%11f .z=%11f\n",
 	    (double)q.w, (double)q.x, (double)q.y, (double)q.z);
 #endif	/* defined(__MINGW32__) */
 }
+
+void
+quat_print_named(char *name, struct quat q)
+{
+#ifndef	__MINGW32__
+	logMsg("Quat %s : .w=%11Lf .x=%11Lf .y=%11Lf .z=%11Lf\n", name, q.w, q.x, q.y, q.z);
+#else	/* defined(__MINGW32__) */
+	logMsg("Quat %s : .w=%11f .x=%11f .y=%11f .z=%11f\n",
+	    name, (double)q.w, (double)q.x, (double)q.y, (double)q.z);
+#endif	/* defined(__MINGW32__) */
+}
+
 
 /*
  * Debug prints a quaternion transformed into Euler angle space
