@@ -65,11 +65,11 @@ extern "C" {
 #define	IS_NULL_QUAT(q)		(!isfinite((q).w))
 #define	NULL_QUAT		((struct quat){{{NAN, NAN, NAN, NAN}}})
 
-struct quat quat_hamil_prod(struct quat p, struct quat q) PURE_ATTR;
-struct quat quat_local2ecmigl(geo_pos2_t refpt, mfloat_t ref_time) PURE_ATTR;
-struct quat quat_ecmigl2local(geo_pos2_t refpt, mfloat_t ref_time) PURE_ATTR;
-struct quat quat_rot_rel(struct quat q1, struct quat q2) PURE_ATTR;
-struct quat quat_rot_concat(struct quat from, struct quat delta) PURE_ATTR;
+struct quat quat_hamil_prod(struct quat p, struct quat q);
+struct quat quat_local2ecmigl(geo_pos2_t refpt, mfloat_t ref_time);
+struct quat quat_ecmigl2local(geo_pos2_t refpt, mfloat_t ref_time);
+struct quat quat_rot_rel(struct quat q1, struct quat q2);
+struct quat quat_rot_concat(struct quat from, struct quat delta);
 void quat_to_axis_angle(struct quat q, struct vec3 *axis, mfloat_t *angle);
 void quat_to_axis_gl_angle(struct quat q, struct vec3 *axis, mfloat_t *angle);
 struct quat quat_from_euler(mfloat_t psi, mfloat_t theta, mfloat_t phi)
